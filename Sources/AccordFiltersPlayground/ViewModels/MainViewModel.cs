@@ -3,17 +3,23 @@ using System.CodeDom.Compiler;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Data;
+using System.Windows.Input;
+using AccordFiltersPlayground.DTO;
 using AccordFiltersPlayground.Filters;
 using AccordFiltersPlayground.Utils;
 using Microsoft.CSharp;
+using Microsoft.Win32;
+using Newtonsoft.Json;
 
 namespace AccordFiltersPlayground.ViewModels
 {
-    public class MainViewModel : BaseViewModel
+    public class MainViewModel : BaseAsyncViewModel
     {
         public MainViewModel()
         {
@@ -36,11 +42,17 @@ namespace AccordFiltersPlayground.ViewModels
                 Code = "return Grayscale.CommonAlgorithms.Y.Apply(Results[0]);"
             });
 
-            FilteredImages.Add(new FilteredImages(2) { InputFilePath = @"..\..\..\..\Data\BadDrivers.jpg" });
-            FilteredImages.Add(new FilteredImages(2) { InputFilePath = @"..\..\..\..\Data\Cust016.png" });
-            FilteredImages.Add(new FilteredImages(2) { InputFilePath = @"..\..\..\..\Data\OursA1BadLight.png" });
+            FilteredImages.Add(new FilteredImages(CodedFilters.Count) { InputFilePath = @"..\..\..\..\Data\BadDrivers.jpg" });
+            FilteredImages.Add(new FilteredImages(CodedFilters.Count) { InputFilePath = @"..\..\..\..\Data\Cust016.png" });
+            FilteredImages.Add(new FilteredImages(CodedFilters.Count) { InputFilePath = @"..\..\..\..\Data\OursA1BadLight.png" });
 
-            EnqueueAsyncFunction(Run);
+            LoadCommand = new ActionCommand(DoLoadCommand);
+            SaveCommand = new ActionCommand(DoSaveCommand);
+
+            RunCommand = new ActionCommand(() => EnqueueAsyncFunction(DoRunCommand));
+            CancelCommand = new ActionCommand(DoCancelCommand);
+
+            EnqueueAsyncFunction(DoRunCommand);
         }
 
         private void CodedFilters_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
@@ -72,18 +84,76 @@ namespace AccordFiltersPlayground.ViewModels
 
         private void CodedFilter_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(CodedFilter.Code))
-                EnqueueAsyncFunction(Run);
+            if (AutoRunOnChanges && e.PropertyName == nameof(CodedFilter.Code))
+                EnqueueAsyncFunction(DoRunCommand);
         }
 
         public ObservableCollection<CodedFilter> CodedFilters { get; }
 
         public ObservableCollection<FilteredImages> FilteredImages { get; }
 
-        private Task Run()
+        public ICommand LoadCommand { get; }
+
+        private void DoLoadCommand()
+        {
+            OpenFileDialog openFileDialog = new OpenFileDialog();
+            if (openFileDialog.ShowDialog() == true)
+            {
+                MainModelDto mainModelDto = JsonConvert.DeserializeObject<MainModelDto>(File.ReadAllText(openFileDialog.FileName));
+
+                for (int i = CodedFilters.Count - 1; i >= 0; i--)
+                    CodedFilters.RemoveAt(i);
+
+                for (int i = FilteredImages.Count - 1; i >= 0; i--)
+                {
+                    foreach (FilteredImage filteredImage in FilteredImages[i].Images)
+                        filteredImage.UnmanagedImage = null;
+
+                    FilteredImages.RemoveAt(i);
+                }
+
+                foreach (CodedFilterDto codedFilterDto in mainModelDto.CodedFilters)
+                    CodedFilters.Add(new CodedFilter {Name = codedFilterDto.Name, Code = codedFilterDto.Code});
+
+                foreach (string inputFilePath in mainModelDto.InputFilePaths)
+                    FilteredImages.Add(new FilteredImages(CodedFilters.Count) {InputFilePath = inputFilePath});
+            }
+        }
+
+        public ICommand SaveCommand { get; }
+
+        private void DoSaveCommand()
+        {
+            SaveFileDialog saveFileDialog = new SaveFileDialog();
+            if (saveFileDialog.ShowDialog() == true)
+            {
+                MainModelDto mainModelDto = new MainModelDto
+                {
+                    CodedFilters = CodedFilters.Select(x => new CodedFilterDto {Name = x.Name, Code = x.Code}).ToList(),
+                    InputFilePaths = FilteredImages.Select(x => x.InputFilePath).ToList()
+                };
+
+                File.WriteAllText(saveFileDialog.FileName, JsonConvert.SerializeObject(mainModelDto));
+            }
+        }
+
+        private bool _autoRunOnChanges;
+
+        public bool AutoRunOnChanges
+        {
+            get => _autoRunOnChanges;
+            set => Set(ref _autoRunOnChanges, value);
+        }
+
+        public ICommand RunCommand { get; }
+
+        private Task DoRunCommand(CancellationToken cancellationToken)
         {
             return Task.Run(() =>
             {
+                if (cancellationToken.IsCancellationRequested)
+                    return;
+
                 StringBuilder builder = new StringBuilder();
                 builder.Append("using System.Drawing;" + Environment.NewLine +
                                "using Accord.Imaging;" + Environment.NewLine +
@@ -128,11 +198,22 @@ namespace AccordFiltersPlayground.ViewModels
                 compilerParameters.ReferencedAssemblies.Add("System.Drawing.dll");
                 compilerParameters.ReferencedAssemblies.Add("Accord.Imaging.dll");
                 compilerParameters.ReferencedAssemblies.Add("AccordFiltersPlayground.exe");
+
+                if (cancellationToken.IsCancellationRequested)
+                    return;
+
                 CompilerResults compilerResults = cSharpCodeProvider.CompileAssemblyFromSource(compilerParameters, builder.ToString());
+
+                if (cancellationToken.IsCancellationRequested)
+                    return;
+
                 ICodedFilters codedFilters = (ICodedFilters) Activator.CreateInstance(compilerResults.CompiledAssembly.GetType("TestCodedFilter"));
 
                 foreach (FilteredImages filteredImages in FilteredImages)
                 {
+                    if (cancellationToken.IsCancellationRequested)
+                        return;
+
                     codedFilters.SourceFilePath = filteredImages.InputFilePath;
                     codedFilters.Run();
 
@@ -145,6 +226,13 @@ namespace AccordFiltersPlayground.ViewModels
                     }
                 }
             });
+        }
+
+        public ICommand CancelCommand { get; }
+
+        private void DoCancelCommand()
+        {
+            CancelAsyncFunctions();
         }
     }
 }

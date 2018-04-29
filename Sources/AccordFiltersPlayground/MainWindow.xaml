@@ -38,12 +38,14 @@
   </Window.Resources>
   <StackPanel Orientation="Vertical">
     <ToolBar>
-      <Button Content="Load" />
-      <Button Content="Save" />
+      <Button Command="{Binding Path=LoadCommand}" Content="Load" />
+      <Button Command="{Binding Path=SaveCommand}" Content="Save" />
       <Separator/>
-      <Button Content="Run" />
+      <CheckBox IsChecked="{Binding Path=AutoRunOnChanges}" Content="Auto run on changes" />
+      <Button Command="{Binding Path=RunCommand}" Content="Run" />
       <Separator/>
       <ProgressBar Width="100" IsIndeterminate="{Binding Path=IsBusy}" />
+      <Button Command="{Binding Path=CancelCommand}" Content="Cancel" />
     </ToolBar>
     <DataGrid ItemsSource="{Binding Path=FilteredImages}" ColumnWidth="200">
       <DataGrid.ColumnHeaderStyle>

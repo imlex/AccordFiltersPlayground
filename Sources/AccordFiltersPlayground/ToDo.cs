@@ -1,6 +1,4 @@
-﻿// ToDo: save/load MainViewModel
-
-// ToDo: CodedFilter.InsertBefore command
+﻿// ToDo: CodedFilter.InsertBefore command
 // ToDo: CodedFilter.InsertBefore command
 // ToDo: CodedFilter.Remove command
 
