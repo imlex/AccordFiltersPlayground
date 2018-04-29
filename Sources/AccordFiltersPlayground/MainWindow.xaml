@@ -1,0 +1,60 @@
+﻿<Window x:Class="AccordFiltersPlayground.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:i="http://schemas.microsoft.com/expression/2010/interactivity"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:behaviors="clr-namespace:AccordFiltersPlayground.Behaviors"
+        xmlns:converters="clr-namespace:AccordFiltersPlayground.Converters"
+        xmlns:viewModels="clr-namespace:AccordFiltersPlayground.ViewModels"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="450" Width="800"
+        FocusManager.GotFocus="MainWindow_OnGotFocus"
+        FocusManager.LostFocus="MainWindow_OnLostFocus">
+  <Window.DataContext>
+    <viewModels:MainViewModel />
+  </Window.DataContext>
+  <Window.Resources>
+    <converters:UnmanagedImageConverter x:Key="UnmanagedImageConverter" />
+    <DataTemplate x:Key="HeaderTemplate" DataType="viewModels:CodedFilter">
+      <StackPanel Orientation="Vertical">
+        <StackPanel.Style>
+          <Style TargetType="StackPanel">
+            <Setter Property="Background" Value="Transparent" />
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding Path=IsSelected}" Value="True">
+                <Setter Property="Background" Value="Magenta" />
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </StackPanel.Style>
+        <TextBox Text="{Binding Path=Name}" Background="Transparent" />
+        <TextBox Text="{Binding Path=Code}" AcceptsReturn="True" MinLines="3" />
+      </StackPanel>
+    </DataTemplate>
+    <DataTemplate x:Key="CellTemplate" DataType="viewModels:FilteredImages">
+      <Image Source="{Binding Path=Images[0].UnmanagedImage, Converter={StaticResource UnmanagedImageConverter}}" />
+    </DataTemplate>
+  </Window.Resources>
+  <StackPanel Orientation="Vertical">
+    <ToolBar>
+      <Button Content="Load" />
+      <Button Content="Save" />
+      <Separator/>
+      <Button Content="Run" />
+      <Separator/>
+      <ProgressBar Width="100" IsIndeterminate="{Binding Path=IsBusy}" />
+    </ToolBar>
+    <DataGrid ItemsSource="{Binding Path=FilteredImages}" ColumnWidth="200">
+      <DataGrid.ColumnHeaderStyle>
+        <Style TargetType="DataGridColumnHeader">
+          <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+      </DataGrid.ColumnHeaderStyle>
+      <i:Interaction.Behaviors>
+        <behaviors:DataGridColumns Columns="{Binding Path=CodedFilters}" HeaderTemplate="{StaticResource HeaderTemplate}"
+                                 CellTemplate="{StaticResource CellTemplate}" />
+      </i:Interaction.Behaviors>
+    </DataGrid>
+  </StackPanel>
+</Window>
